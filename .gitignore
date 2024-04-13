@@ -190,3 +190,5 @@ fabric.properties
 .idea/misc.xml
 /.idea
 .idea/bsk encrypting.iml
+*.iml
+*.xml
