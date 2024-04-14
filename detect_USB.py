@@ -10,11 +10,12 @@ def detect_usb():
             key_file_path = os.path.join(removable_disk, 'key.pem')
             if os.path.exists(key_file_path):
                 print("Found key.pem file on the removable disk.")
-                password = input("Enter your password: ")
+                # password = input("Enter your password: ")
                 return True
             else:
                 print("key.pem file not found on the removable disk.")
                 return False
+    print("No USB drive found.")
     return False
 
 
