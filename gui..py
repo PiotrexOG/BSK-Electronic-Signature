@@ -2,27 +2,24 @@ import customtkinter
 from detect_USB import detect_usb
 from tkinter import filedialog
 from typing import Literal, Union, Tuple
+from main import generate_rsa_keypair, save_private_key, save_public_key, select_file, encrypt_file
+import customtkinter as ctk
 
-def generate_private_key(entry):
-    entry.delete(0, customtkinter.END)
-    entry.insert(0, "Private Key Generated")
-    pass
+def generate_private_key_and_public(label):
+    label.configure(text="Keys Generated")
+    private_key, public_key = generate_rsa_keypair()
+    save_private_key(private_key, "private_key.pem")
+    save_public_key(public_key, "public_key.pem")
 
-
-def generate_public_key(entry):
-    entry.delete(0, customtkinter.END)
-    entry.insert(0, "Public Key Generated")
-    pass
-
-
+global_filepath = None
 def choose_private_key():
-    filepath = filedialog.askopenfilename()
-    # Functionality to handle selected file
-    pass
+    global global_filepath
+    global_filepath = filedialog.askopenfilename()
 
 
-def encrypt():
-    # Functionality to encrypt using selected private key and password
+
+def encrypt(password):
+
     pass
 
 
@@ -36,9 +33,6 @@ def choose_file_to_sign():
     filepath = filedialog.askopenfilename()
     # Functionality to handle selected file to sign
     pass
-
-
-import customtkinter as ctk
 
 
 def create_root_window():
@@ -78,6 +72,10 @@ def create_entry(parent, placeholder_text="", show="", row=0, column=0, padx=40,
     return entry
 
 
+def choose_the_document():
+    global global_filepath
+    global_filepath = filedialog.askopenfilename()
+
 def create_empty_label(parent, text="", row=0, column=0, padx=40, pady=(20, 10)):
     label = ctk.CTkLabel(parent, text=text)
     label.grid(row=row, column=column, padx=padx, pady=pady)
@@ -86,12 +84,11 @@ def create_empty_label(parent, text="", row=0, column=0, padx=40, pady=(20, 10))
 
 def create_sidebar(root, row, column, rowspan):
     sidebar = create_sidebar_frame(root, row, column, rowspan)
-    entry = create_entry(sidebar, row=3)
-
+    label = create_label(sidebar, "Status", row=3)
+    label.configure(text="Status")
     # Sidebar content
     create_label(sidebar, "Generator", row=0)
-    create_button(sidebar, "Generate private key", command=generate_private_key(entry), row=1)
-    create_button(sidebar, "Generate public key", command=generate_public_key(entry), row=2)
+    create_button(sidebar, "Generate private key and public key", command=lambda: generate_private_key_and_public(label), row=1)
     create_empty_label(sidebar, row=4)
 
     return sidebar
@@ -102,14 +99,15 @@ def create_encryption_sidebar(root, row, column, rowspan):
 
     # Encryption content
     create_label(sidebar, "Encryption", row=0)
-    create_button(sidebar, "Choose private key", command=generate_private_key, row=1)
-    create_entry(sidebar, placeholder_text="Type password", show="*", row=2)
-    create_button(sidebar, "Encrypt", command=encrypt, row=3)
+    create_button(sidebar, "Choose private key", command=choose_private_key, row=1)
+    entry_password = create_entry(sidebar, placeholder_text="Type password", show="*", row=2)
+    password = entry_password.get()
+    create_button(sidebar, "Encrypt", command=lambda: encrypt(password), row=3)
 
     create_empty_label(sidebar, row=4)
     # Decryption content
     create_label(sidebar, "Decryption", row=5)
-    create_button(sidebar, "Choose private key", command=generate_private_key, row=6)
+    create_button(sidebar, "Choose private key", command=generate_private_key_and_public, row=6)
     create_entry(sidebar, placeholder_text="Type password", show="*", row=7)
     create_button(sidebar, "Decrypt", command=decrypt, row=8, padx=40, pady=(10,50))
 
@@ -125,8 +123,7 @@ def create_sign_document_sidebar(root, row, column, rowspan):
     pendrive_label = create_label(sidebar, "Insert Pendrive", row=1, pady=(20, 10))
     if detect_usb():
         pendrive_label.configure(text="Pendrive Inside")
-        create_button(sidebar, "Choose the document to be sign", command=generate_private_key, row=2)
-        create_button(sidebar, "Generate public key", command=generate_public_key, row=3)
+        create_button(sidebar, "Choose the document to be sign", command=choose_file_to_sign, row=2)
         create_empty_label(sidebar, row=4)
 
     return sidebar
@@ -134,8 +131,6 @@ def create_sign_document_sidebar(root, row, column, rowspan):
 
 # Main function
 def main():
-    # global pendrive
-    # pendrive = False
 
     root = create_root_window()
     sidebar_frame = create_sidebar(root, 0, 0, 3)
