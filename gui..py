@@ -2,8 +2,9 @@ import customtkinter
 from detect_USB import detect_usb
 from tkinter import filedialog
 from typing import Literal, Union, Tuple
-from main import generate_rsa_keypair, save_private_key, save_public_key, select_file, encrypt_file
+from main import *
 import customtkinter as ctk
+import os
 
 def generate_private_key_and_public(label):
     label.configure(text="Keys Generated")
@@ -29,16 +30,25 @@ def decrypt():
     pass
 
 
-def choose_file_to_sign():
+def choose_file_to_sign(private_key_path):
     filepath = filedialog.askopenfilename()
-    # Functionality to handle selected file to sign
-    pass
+    print(filepath)
+    print(private_key_path)
+    private_key_path = os.path.normpath(private_key_path)
+    with open(private_key_path, "rb") as key_file:
+        private_key = serialization.load_pem_private_key(
+            key_file.read(),
+            password=None,
+            backend=default_backend()
+        )
+    create_xades_signature(filepath, private_key)
+
 
 
 def create_root_window():
     root = ctk.CTk()
     root.title("BSK Electronic Signature by Krzysztof Madajczak 188674 and Piotr Wesołowski")
-    root.geometry("800x600")
+    root.geometry("900x600")
     root.grid_rowconfigure(2, weight=1)
     return root
 
@@ -73,6 +83,7 @@ def create_entry(parent, placeholder_text="", show="", row=0, column=0, padx=40,
 
 
 def choose_the_document():
+
     global global_filepath
     global_filepath = filedialog.askopenfilename()
 
@@ -121,9 +132,11 @@ def create_sign_document_sidebar(root, row, column, rowspan):
     create_label(sidebar, "Sign document", row=0)
 
     pendrive_label = create_label(sidebar, "Insert Pendrive", row=1, pady=(20, 10))
-    if detect_usb():
+
+    private_key_path = detect_usb()
+    if os.path.exists(private_key_path):
         pendrive_label.configure(text="Pendrive Inside")
-        create_button(sidebar, "Choose the document to be sign", command=choose_file_to_sign, row=2)
+        create_button(sidebar, "Choose the document to be sign", command=lambda: choose_file_to_sign(private_key_path), row=2)
         create_empty_label(sidebar, row=4)
 
     return sidebar
