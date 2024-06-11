@@ -1,0 +1,121 @@
+import base64
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from tkinter import filedialog
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+import os
+import globals
+from krzysztof.encription import decrypt_key
+
+
+def sign_file(password,private_key_path, label):
+    if not globals.correctPassword:
+        label.configure(text="Wrong password")
+        return
+    else:
+        label.configure(text="Signature complete")
+        filepath = filedialog.askopenfilename()
+        private_key, hasz = decrypt_key(password, private_key_path)
+        create_xades_signature(filepath, private_key)
+
+def sign_document(document_hash, private_key):
+    signature = private_key.sign(
+        document_hash,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+    return signature
+
+def create_xades_signature(document_path, private_key):
+    try:
+        # Pobierz informacje o dokumencie
+        document_size = os.path.getsize(document_path)
+        document_extension = os.path.splitext(document_path)[-1]
+        modification_date = datetime.fromtimestamp(os.path.getmtime(document_path))
+
+        # Podpisz dokument
+        with open(document_path, "rb") as file:
+            document_content = file.read()
+
+        document_hash = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        document_hash.update(document_content)
+        calculated_digest = document_hash.finalize()
+
+        signature = sign_document(calculated_digest, private_key)
+
+        # Stwórz dokument XML
+        root = ET.Element("XAdES_Signature")
+        document_info = ET.SubElement(root, "DocumentInfo")
+        document_info.set("size", str(document_size))
+        document_info.set("extension", document_extension)
+        document_info.set("modification_date", str(modification_date))
+        ET.SubElement(root, "SigningUserInfo", name="User A")
+        ET.SubElement(root, "Timestamp").text = str(datetime.now())
+        ET.SubElement(root, "EncryptedHash").text = base64.b64encode(signature).decode()
+
+        # Zapisz dokument XML
+        xml_tree = ET.ElementTree(root)
+        directory = os.path.dirname(document_path)
+        temp_path = os.path.join(directory, 'signature.xml')
+        temp_path = os.path.normpath(temp_path)
+        xml_tree.write(temp_path)
+        print("Signature xml written to {}".format(temp_path))
+
+        return signature
+
+    except Exception as e:
+        print("Error creating XAdES signature:", e)
+        return None
+
+def verify_signature(document_path, signature_xml_path, public_key):
+    try:
+        # Pobierz informacje o dokumencie
+        document_size = os.path.getsize(document_path)
+        document_extension = os.path.splitext(document_path)[-1]
+        modification_date = datetime.fromtimestamp(os.path.getmtime(document_path))
+
+        # Oblicz skrót dokumentu
+        with open(document_path, "rb") as file:
+            document_content = file.read()
+        document_hash = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        document_hash.update(document_content)
+        calculated_digest = document_hash.finalize()
+
+        # Odczytaj sygnaturę z pliku XML
+        tree = ET.parse(signature_xml_path)
+        root = tree.getroot()
+        signature_base64 = root.find("EncryptedHash").text
+        signature = base64.b64decode(signature_base64)
+
+        # Sprawdź ogólne informacje o dokumencie
+        doc_info = root.find("DocumentInfo")
+        if (doc_info.get("size") != str(document_size) or
+            doc_info.get("extension") != document_extension or
+            doc_info.get("modification_date") != modification_date.isoformat()):
+            raise ValueError("Document information mismatch.")
+
+        # Weryfikacja podpisu przy użyciu klucza publicznego
+        public_key.verify(
+            signature,
+            calculated_digest,
+            padding.PKCS1v15(),  # Używamy PKCS1v15 zamiast PSS
+            hashes.SHA256()
+        )
+
+        # Odczytaj informacje o użytkowniku podpisującym
+        signing_user_info = root.find("SigningUserInfo")
+        if signing_user_info is None or signing_user_info.get("name") != "User A":
+            raise ValueError("Invalid signing user information.")
+
+        # Odczytaj znacznik czasu
+        timestamp = root.find("Timestamp").text
+        print(f"Signature timestamp: {timestamp}")
+
+        print("Signature verified successfully.")
+    except Exception as e:
+        print("Signature verification failed:", e)
