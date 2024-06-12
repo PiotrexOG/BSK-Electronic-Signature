@@ -36,7 +36,7 @@ def create_xades_signature(document_path, private_key):
         # Pobierz informacje o dokumencie
         document_size = os.path.getsize(document_path)
         document_extension = os.path.splitext(document_path)[-1]
-        modification_date = datetime.fromtimestamp(os.path.getmtime(document_path))
+        modification_date = datetime.fromtimestamp(os.path.getmtime(document_path)).isoformat()
 
         # Podpisz dokument
         with open(document_path, "rb") as file:
@@ -46,16 +46,19 @@ def create_xades_signature(document_path, private_key):
         document_hash.update(document_content)
         calculated_digest = document_hash.finalize()
 
+        print(f"Calculated digest (signing): {calculated_digest.hex()}")  # Debugowanie
+
         signature = sign_document(calculated_digest, private_key)
+        print(f"Signature: {base64.b64encode(signature).decode()}")  # Debugowanie
 
         # Stwórz dokument XML
         root = ET.Element("XAdES_Signature")
         document_info = ET.SubElement(root, "DocumentInfo")
         document_info.set("size", str(document_size))
         document_info.set("extension", document_extension)
-        document_info.set("modification_date", str(modification_date))
+        document_info.set("modification_date", modification_date)
         ET.SubElement(root, "SigningUserInfo", name="User A")
-        ET.SubElement(root, "Timestamp").text = str(datetime.now())
+        ET.SubElement(root, "Timestamp").text = datetime.now().isoformat()
         ET.SubElement(root, "EncryptedHash").text = base64.b64encode(signature).decode()
 
         # Zapisz dokument XML
@@ -72,12 +75,16 @@ def create_xades_signature(document_path, private_key):
         print("Error creating XAdES signature:", e)
         return None
 
+
 def verify_signature(document_path, signature_xml_path, public_key):
+    if public_key is None:
+        print("Public key is None")
+        return
     try:
         # Pobierz informacje o dokumencie
         document_size = os.path.getsize(document_path)
         document_extension = os.path.splitext(document_path)[-1]
-        modification_date = datetime.fromtimestamp(os.path.getmtime(document_path))
+        modification_date = datetime.fromtimestamp(os.path.getmtime(document_path)).isoformat()
 
         # Oblicz skrót dokumentu
         with open(document_path, "rb") as file:
@@ -86,24 +93,33 @@ def verify_signature(document_path, signature_xml_path, public_key):
         document_hash.update(document_content)
         calculated_digest = document_hash.finalize()
 
+        print(f"Calculated digest (verification): {calculated_digest.hex()}")  # Debugowanie
+
         # Odczytaj sygnaturę z pliku XML
         tree = ET.parse(signature_xml_path)
         root = tree.getroot()
         signature_base64 = root.find("EncryptedHash").text
         signature = base64.b64decode(signature_base64)
 
+        #print(f"Signature (verification): {base64.b64encode(signature).decode()}")  # Debugowanie
+
         # Sprawdź ogólne informacje o dokumencie
         doc_info = root.find("DocumentInfo")
         if (doc_info.get("size") != str(document_size) or
             doc_info.get("extension") != document_extension or
-            doc_info.get("modification_date") != modification_date.isoformat()):
+            doc_info.get("modification_date") != modification_date):
+            print(f"Expected size: {document_size}, extension: {document_extension}, modification_date: {modification_date}")
+            print(f"Found size: {doc_info.get('size')}, extension: {doc_info.get('extension')}, modification_date: {doc_info.get('modification_date')}")
             raise ValueError("Document information mismatch.")
 
         # Weryfikacja podpisu przy użyciu klucza publicznego
         public_key.verify(
             signature,
             calculated_digest,
-            padding.PKCS1v15(),  # Używamy PKCS1v15 zamiast PSS
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
             hashes.SHA256()
         )
 

@@ -2,20 +2,29 @@ import base64
 import xml.etree.ElementTree as ET
 import os
 import hashlib
+from tkinter import filedialog
+
+from Crypto.PublicKey import RSA
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.Util.Padding import pad, unpad
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-
-def print_key(key):
-    key_pem = key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption()
-    ).decode('utf-8')
+import globals
+def print_key(key, private=True):
+    if private:
+        key_pem = key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()
+        ).decode('utf-8')
+    else:
+        key_pem = key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode('utf-8')
     print(key_pem)
 
 def encrypt_key(password, private_key):
@@ -36,8 +45,6 @@ def encrypt_key(password, private_key):
     )
     
     padded_private_key = pad(private_key_bytes, AES.block_size)
-
-    # Zaszyfruj dodany padding klucza prywatnego
     cipher_data = cipher.encrypt(padded_private_key)
     hasz = hashlib.sha256(password.encode()).hexdigest()
     # Zapisz sól, IV i zaszyfrowane dane do pliku
@@ -49,8 +56,11 @@ def encrypt_key(password, private_key):
 
     return
 
-def decrypt_key(password = 123, path = 'keys/encrypted_private_key.bin'):
-    with open('keys/encrypted_private_key.bin', 'rb') as f:
+def decrypt_key(password, path):
+    # if password == '' or password is None:
+    #     print('Password is empty')
+    #     return False, False
+    with open(path, 'rb') as f:
         salt = f.read(32)
         hasz = f.read(64)
         iv = f.read(16)
@@ -88,12 +98,11 @@ def load_public_key(filename):
 def generate_rsa_keypair():
     private_key = rsa.generate_private_key(
         public_exponent=65537,
-        key_size=2048,
+        key_size=4096,
         backend=default_backend()
     )
     public_key = private_key.public_key()
     return private_key, public_key
-
 
 
 def save_private_key(private_key, filename):
@@ -116,35 +125,83 @@ def save_public_key(public_key, filename):
         )
 
 
+def decrypt_file():
+    if globals.correctPassword:
+        print("Odszyfrowywanie")
+        private_key, hasz = decrypt_key(password = globals.key_password, path = globals.path_private_key)
+        file_path = filedialog.askopenfilename()
 
-def encrypt_file(input_file, output_file, key):
-    # Open the input file and read its contents
-    with open(input_file, 'rb') as f:
-        file_content = f.read()
+        with open(file_path, 'rb') as f:
+            ciphertext = f.read()
 
-    # Encrypt the file content with the symmetric key
-    iv = os.urandom(16)  # Initialization vector for AES
-    cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
-    encryptor = cipher.encryptor()
-    encrypted_content = encryptor.update(file_content) + encryptor.finalize()
+        plaintext = private_key.decrypt(
+            ciphertext,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        directory, filename = os.path.split(file_path)
+        new_filename = f"odszy_{filename}"
+        new_file_path = os.path.join(directory, new_filename)
+        print(f"Odszyfrowana wiadomość {plaintext}")
+        with open(new_file_path, 'wb') as f:
+             f.write(plaintext)
+    else:
+        print("Złe hasło")
 
-    # Write the encrypted content to the output file
-    with open(output_file, 'wb') as f:
-        f.write(iv)
-        f.write(encrypted_content)
+def encrypt_file():
+    if globals.public_key is None:
+        print("YOU MUST SELECT PUBLIC KEY TO ENCRYPT")
+        return
+    print("SZYFROWANIE")
+    file_path = filedialog.askopenfilename()
+    with open(file_path, 'rb') as f:
+        plaintext = f.read()
+    ciphertext = globals.public_key.encrypt(
+        plaintext,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+    directory, filename = os.path.split(file_path)
+    new_filename = f"szyfr_{filename}"
+    new_file_path = os.path.join(directory, new_filename)
 
-def decrypt_file(input_file, output_file, key):
-    # Open the encrypted file and read its contents along with the IV
-    with open(input_file, 'rb') as f:
-        iv = f.read(16)  # Read the first 16 bytes as the IV
-        encrypted_content = f.read()
+    with open(new_file_path, 'wb') as f:
+        f.write(ciphertext)
 
-    # Decrypt the file content with the symmetric key and IV
-    cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
-    decryptor = cipher.decryptor()
-    decrypted_content = decryptor.update(encrypted_content) + decryptor.finalize()
 
-    # Write the decrypted content to the output file
-    with open(output_file, 'wb') as f:
-        f.write(decrypted_content)
-
+# def test():
+#     private_key, hasz = decrypt_key()
+#     public_key = private_key.public_key()
+#
+#     with open('test.txt', 'rb') as f:
+#         plaintext = f.read()
+#     ciphertext = public_key.encrypt(
+#         plaintext,
+#         padding.OAEP(
+#             mgf=padding.MGF1(algorithm=hashes.SHA256()),
+#             algorithm=hashes.SHA256(),
+#             label=None
+#         )
+#     )
+#     with open('test.bin', 'wb') as f:
+#         f.write(ciphertext)
+#
+#     with open('test.bin', 'rb') as f:
+#         test_enc = f.read()
+#
+#
+#     plaintext = private_key.decrypt(
+#         test_enc,
+#         padding.OAEP(
+#             mgf=padding.MGF1(algorithm=hashes.SHA256()),
+#             algorithm=hashes.SHA256(),
+#             label=None
+#         )
+#     )
+#     print(plaintext)
