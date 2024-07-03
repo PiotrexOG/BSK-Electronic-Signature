@@ -43,47 +43,42 @@ def encrypt_key(password, private_key):
         format=serialization.PrivateFormat.TraditionalOpenSSL,
         encryption_algorithm=serialization.NoEncryption()
     )
-    
     padded_private_key = pad(private_key_bytes, AES.block_size)
     cipher_data = cipher.encrypt(padded_private_key)
     hasz = hashlib.sha256(password.encode()).hexdigest()
-    # Zapisz sól, IV i zaszyfrowane dane do pliku
     with open('keys/encrypted_private_key.bin', 'wb') as f:
-        f.write(salt)  # Zapisz sól do pliku
-        f.write(hasz.encode())  # Zapisz sól do pliku
-        f.write(cipher.iv)  # Zapisz wektor inicjalizacyjny do pliku
-        f.write(cipher_data)  # Zapisz zaszyfrowane dane klucza prywatnego do pliku
+        f.write(salt)
+        f.write(hasz.encode())
+        f.write(cipher.iv)
+        f.write(cipher_data)
 
-    return
-
-def decrypt_key(password, path):
-    # if password == '' or password is None:
-    #     print('Password is empty')
-    #     return False, False
-    with open(path, 'rb') as f:
-        salt = f.read(32)
-        hasz = f.read(64)
-        iv = f.read(16)
-        cipher_data = f.read()
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=100000,
-        backend=default_backend()
-    )
-    key = kdf.derive(password.encode())
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    decrypted_padded_private_key = cipher.decrypt(cipher_data)
-    private_key_bytes = unpad(decrypted_padded_private_key, AES.block_size)
-    private_key = serialization.load_pem_private_key(
-        private_key_bytes,
-        password=None,
-        backend=default_backend()
-    )
-
-    return private_key, hasz
-
+def decrypt_key(password, path= 'keys'):
+    try:
+        with open(path, 'rb') as f:
+            salt = f.read(32)
+            hasz = f.read(64)
+            iv = f.read(16)
+            cipher_data = f.read()
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+            backend=default_backend()
+        )
+        key = kdf.derive(password.encode())
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        decrypted_padded_private_key = cipher.decrypt(cipher_data)
+        private_key_bytes = unpad(decrypted_padded_private_key, AES.block_size)
+        private_key = serialization.load_pem_private_key(
+            private_key_bytes,
+            password=None,
+            backend=default_backend()
+        )
+        return private_key, hasz
+    except Exception as e:
+        print(f"Password wrong")
+        return False, False
 
 
 def load_public_key(filename):
@@ -129,6 +124,8 @@ def decrypt_file():
     if globals.correctPassword:
         print("Odszyfrowywanie")
         private_key, hasz = decrypt_key(password = globals.key_password, path = globals.path_private_key)
+        if not hasz:
+            return
         file_path = filedialog.askopenfilename()
 
         with open(file_path, 'rb') as f:

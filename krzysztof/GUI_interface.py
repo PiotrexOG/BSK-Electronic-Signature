@@ -29,9 +29,9 @@ def generate_private_key_and_public(label, pin='123'):
         if not Path("keys").exists():
             Path("keys").mkdir()
         save_private_key(private_key, "keys/not_encrypted_private_key.pem")
-        pri, hasz =decrypt_key(pin)
-        if private_key == pri:
-            print("odszyfrowanie działa pomyślnie")
+        # pri, hasz =decrypt_key(pin, "keys/not_encrypted_private_key.pem")
+        # if private_key == pri:
+        #     print("odszyfrowanie działa pomyślnie")
         save_public_key(public_key_temp, "keys/not_encrypted_public_key.pem")
 
 def choose_xml():
@@ -71,6 +71,9 @@ def check_password(password, private_key_path, label):
         print("password required")
         return
     private_key, hasz = decrypt_key(password,private_key_path)
+    if not hasz:
+        label.configure(text="Wrong password")
+        return
     globals.GL_private_key = private_key
     if hasz.decode('utf-8')  == hashlib.sha256(password.encode()).hexdigest():
         label.configure(text="hasło poprawne")
@@ -81,11 +84,12 @@ def check_password(password, private_key_path, label):
 
 def create_encryption_sidebar(root, row, column, rowspan):
     sidebar = create_sidebar_frame(root, row, column, rowspan, width=200)
-    create_label(sidebar, "check Sign/Decryption", row=0)
-    feedback = create_label(sidebar, "Decryption", row=1)
-    create_button(sidebar, "Choose the document to be Decrypted", command=lambda: decrypt_file(), row=2)
-    password_temp = create_entry(sidebar, placeholder_text="Enter PIN", row=3)
-    create_button(sidebar, "check password", command=lambda: check_password(password_temp.get(), globals.path_private_key, feedback), row=4)
+    create_label(sidebar, "check Sign/Encryption", row=0)
+    feedback = create_label(sidebar, "Encryption", row=1)
+    create_button(sidebar, "public key", command=lambda: choose_public_key(), row=2)
+    create_button(sidebar, "Choose the document to be Encrypted", command=lambda: encrypt_file(), row=3)
+    #password_temp = create_entry(sidebar, placeholder_text="Enter PIN", row=3)
+    #create_button(sidebar, "check password", command=lambda: check_password(password_temp.get(), globals.path_private_key, feedback), row=4)
     create_label(sidebar, "Check signature", row=5)
     create_button(sidebar, "choose document", command=lambda: choose_the_document(), row=6)
     create_button(sidebar, "choose XML", command=lambda: choose_xml(), row=7)
@@ -94,18 +98,17 @@ def create_encryption_sidebar(root, row, column, rowspan):
 
 def create_sign_document_sidebar(root, row, column, rowspan):
     sidebar = create_sidebar_frame(root, row, column, rowspan, width=200)
-    create_label(sidebar, "Sign/Encryption", row=0)
+    create_label(sidebar, "Sign/Decryption", row=0)
     pendrive_label = create_label(sidebar, "Insert Pendrive", row=1, pady=(20, 10))
-    create_button(sidebar, "public key", command=lambda: choose_public_key(), row=2)
-    create_button(sidebar, "Choose the document to be Encrypted", command=lambda: encrypt_file(), row=3)
+
 
     feedback = create_label(sidebar, "", row=6, pady=(20, 10))
     refresh_sidebar_if_usb_detected(root, sidebar, pendrive_label, feedback)  # Start periodic check
 
 
 def update_sign_document_sidebar(sidebar, pendrive_label, feedback):
-    pendrive_label.configure(text="Encryption")
-
+    pendrive_label.configure(text="Decryption")
+    create_button(sidebar, "Choose the document to be Decrypted", command=lambda: decrypt_file(), row=2)
     create_label(sidebar, "Sign", row=4)
     password_temp = create_entry(sidebar, placeholder_text="Enter PIN", row=5)
     create_button(sidebar, "check password", command=lambda: check_password(password_temp.get(), globals.path_private_key, feedback), row=7)

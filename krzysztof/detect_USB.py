@@ -18,8 +18,6 @@ def usb_detection_loop():
             globals.usb_detected_event.set()
         time.sleep(5)  # Check every 5 seconds
 
-
-
 def detect_usb():
     for partition in psutil.disk_partitions():
         if 'removable' in partition.opts:

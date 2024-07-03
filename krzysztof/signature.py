@@ -18,6 +18,8 @@ def sign_file(password,private_key_path, label):
         label.configure(text="Signature complete")
         filepath = filedialog.askopenfilename()
         private_key, hasz = decrypt_key(password, private_key_path)
+        if not hasz:
+            return
         create_xades_signature(filepath, private_key)
 
 def sign_document(document_hash, private_key):
@@ -51,7 +53,6 @@ def create_xades_signature(document_path, private_key):
         signature = sign_document(calculated_digest, private_key)
         print(f"Signature: {base64.b64encode(signature).decode()}")  # Debugowanie
 
-        # Stwórz dokument XML
         root = ET.Element("XAdES_Signature")
         document_info = ET.SubElement(root, "DocumentInfo")
         document_info.set("size", str(document_size))
@@ -61,14 +62,12 @@ def create_xades_signature(document_path, private_key):
         ET.SubElement(root, "Timestamp").text = datetime.now().isoformat()
         ET.SubElement(root, "EncryptedHash").text = base64.b64encode(signature).decode()
 
-        # Zapisz dokument XML
         xml_tree = ET.ElementTree(root)
         directory = os.path.dirname(document_path)
         temp_path = os.path.join(directory, 'signature.xml')
         temp_path = os.path.normpath(temp_path)
         xml_tree.write(temp_path)
         print("Signature xml written to {}".format(temp_path))
-
         return signature
 
     except Exception as e:
